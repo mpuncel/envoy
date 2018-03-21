@@ -502,8 +502,11 @@ StaticClusterImpl::StaticClusterImpl(const envoy::api::v2::Cluster& cluster,
       initial_hosts_(new HostVector()) {
 
   for (const auto& host : cluster.hosts()) {
+    // specifying a separate health check address for statically defined hosts
+    // is not supported
+    Network::Address::InstanceConstSharedPtr address = Network::Address::resolveProtoAddress(host);
     initial_hosts_->emplace_back(HostSharedPtr{new HostImpl(
-        info_, "", resolveProtoAddress(host), envoy::api::v2::core::Metadata::default_instance(), 1,
+        info_, "", address, address, envoy::api::v2::core::Metadata::default_instance(), 1,
         envoy::api::v2::core::Locality().default_instance())});
   }
 }
@@ -698,8 +701,10 @@ void StrictDnsClusterImpl::ResolveTarget::startResolve() {
           // a new address that has port in it. We need to both support IPv6 as well as potentially
           // move port handling into the DNS interface itself, which would work better for SRV.
           ASSERT(address != nullptr);
+          // Setting a different health_check_address is not supported for strict DNS clusters
+          Network::Address::InstanceConstSharedPtr addressWithPort = Network::Utility::getAddressWithPort(*address, port_);
           new_hosts.emplace_back(new HostImpl(parent_.info_, dns_address_,
-                                              Network::Utility::getAddressWithPort(*address, port_),
+                                              addressWithPort, addressWithPort,
                                               envoy::api::v2::core::Metadata::default_instance(), 1,
                                               envoy::api::v2::core::Locality().default_instance()));
         }

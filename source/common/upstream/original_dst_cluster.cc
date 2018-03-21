@@ -59,8 +59,11 @@ HostConstSharedPtr OriginalDstCluster::LoadBalancer::chooseHost(LoadBalancerCont
       if (dst_ip) {
         Network::Address::InstanceConstSharedPtr host_ip_port(
             Network::Utility::copyInternetAddressAndPort(*dst_ip));
+        Network::Address::InstanceConstSharedPtr host_health_check_ip_port(
+            Network::Utility::copyInternetAddressAndPort(*dst_ip));
         // Create a host we can use immediately.
         host.reset(new HostImpl(info_, info_->name() + dst_addr.asString(), std::move(host_ip_port),
+                                std::move(host_healh_check_ip_port),
                                 envoy::api::v2::core::Metadata::default_instance(), 1,
                                 envoy::api::v2::core::Locality().default_instance()));
 

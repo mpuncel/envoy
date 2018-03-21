@@ -68,9 +68,11 @@ class HostDescriptionImpl : virtual public HostDescription {
 public:
   HostDescriptionImpl(ClusterInfoConstSharedPtr cluster, const std::string& hostname,
                       Network::Address::InstanceConstSharedPtr dest_address,
+                      Network::Address::InstanceConstSharedPtr health_check_address,
                       const envoy::api::v2::core::Metadata& metadata,
                       const envoy::api::v2::core::Locality& locality)
       : cluster_(cluster), hostname_(hostname), address_(dest_address),
+        health_check_address_(health_check_address),
         canary_(Config::Metadata::metadataValue(metadata, Config::MetadataFilters::get().ENVOY_LB,
                                                 Config::MetadataEnvoyLbKeys::get().CANARY)
                     .bool_value()),
@@ -103,12 +105,14 @@ public:
   const HostStats& stats() const override { return stats_; }
   const std::string& hostname() const override { return hostname_; }
   Network::Address::InstanceConstSharedPtr address() const override { return address_; }
+  Network::Address::InstanceConstSharedPtr healthCheckAddress() const override { return health_check_address_; }
   const envoy::api::v2::core::Locality& locality() const override { return locality_; }
 
 protected:
   ClusterInfoConstSharedPtr cluster_;
   const std::string hostname_;
   Network::Address::InstanceConstSharedPtr address_;
+  Network::Address::InstanceConstSharedPtr health_check_address_;
   const bool canary_;
   const envoy::api::v2::core::Metadata metadata_;
   const envoy::api::v2::core::Locality locality_;
@@ -127,9 +131,11 @@ class HostImpl : public HostDescriptionImpl,
 public:
   HostImpl(ClusterInfoConstSharedPtr cluster, const std::string& hostname,
            Network::Address::InstanceConstSharedPtr address,
+           Network::Address::InstanceConstSharedPtr health_check_address,
            const envoy::api::v2::core::Metadata& metadata, uint32_t initial_weight,
            const envoy::api::v2::core::Locality& locality)
-      : HostDescriptionImpl(cluster, hostname, address, metadata, locality), used_(true) {
+      : HostDescriptionImpl(cluster, hostname, address,
+          health_check_address, metadata, locality), used_(true) {
     weight(initial_weight);
   }
 

@@ -206,6 +206,7 @@ TEST_F(LogicalDnsClusterTest, Basic) {
   EXPECT_EQ(&cluster_->prioritySet().hostSetsPerPriority()[0]->hosts()[0]->stats(),
             &data.host_description_->stats());
   EXPECT_EQ("127.0.0.1:443", data.host_description_->address()->asString());
+  EXPECT_EQ("127.0.0.1:443", data.host_description_->healthCheckAddress()->asString());
   EXPECT_EQ("", data.host_description_->locality().region());
   EXPECT_EQ("", data.host_description_->locality().zone());
   EXPECT_EQ("", data.host_description_->locality().sub_zone());

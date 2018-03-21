@@ -84,6 +84,11 @@ public:
   virtual Network::Address::InstanceConstSharedPtr address() const PURE;
 
   /**
+   * @return the address used to to the check the health of the host.
+   */
+  virtual Network::Address::InstanceConstSharedPtr healthCheckAddress() const PURE;
+
+  /**
    * @return host specific stats.
    */
   virtual const HostStats& stats() const PURE;

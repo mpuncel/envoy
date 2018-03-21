@@ -76,8 +76,15 @@ void EdsClusterImpl::onConfigUpdate(const ResourceVector& resources) {
       new_hosts[priority] = HostListPtr{new HostVector};
     }
     for (const auto& lb_endpoint : locality_lb_endpoint.lb_endpoints()) {
+      Network::Address::InstanceConstSharedPtr dst_address = Network::Address::resolveProtoAddress(lb_endpoint.endpoint().address());
+      Network::Address::InstanceConstSharedPtr health_check_address;
+      if (lb_endpoint.endpoint().has_health_check_address()) {
+        health_check_address = Network::Address::resolveProtoAddress(lb_endpoint.endpoint().health_check_address());
+      } else {
+        health_check_address = dst_address;
+      }
       new_hosts[priority]->emplace_back(new HostImpl(
-          info_, "", resolveProtoAddress(lb_endpoint.endpoint().address()), lb_endpoint.metadata(),
+          info_, "", dst_address, health_check_address, lb_endpoint.metadata(),
           lb_endpoint.load_balancing_weight().value(), locality_lb_endpoint.locality()));
     }
   }

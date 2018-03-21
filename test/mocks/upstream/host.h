@@ -76,6 +76,7 @@ public:
   ~MockHostDescription();
 
   MOCK_CONST_METHOD0(address, Network::Address::InstanceConstSharedPtr());
+  MOCK_CONST_METHOD0(healthCheckAddress, Network::Address::InstanceConstSharedPtr());
   MOCK_CONST_METHOD0(canary, bool());
   MOCK_CONST_METHOD0(metadata, const envoy::api::v2::core::Metadata&());
   MOCK_CONST_METHOD0(cluster, const ClusterInfo&());
@@ -87,6 +88,7 @@ public:
 
   std::string hostname_;
   Network::Address::InstanceConstSharedPtr address_;
+  Network::Address::InstanceConstSharedPtr health_check_address_;
   testing::NiceMock<Outlier::MockDetectorHostMonitor> outlier_detector_;
   testing::NiceMock<MockHealthCheckHostMonitor> health_checker_;
   testing::NiceMock<MockClusterInfo> cluster_;
@@ -120,6 +122,7 @@ public:
   }
 
   MOCK_CONST_METHOD0(address, Network::Address::InstanceConstSharedPtr());
+  MOCK_CONST_METHOD0(healthCheckAddress, Network::Address::InstanceConstSharedPtr());
   MOCK_CONST_METHOD0(canary, bool());
   MOCK_CONST_METHOD0(metadata, const envoy::api::v2::core::Metadata&());
   MOCK_CONST_METHOD0(cluster, const ClusterInfo&());
