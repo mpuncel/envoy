@@ -55,6 +55,12 @@ HostImpl::createConnection(Event::Dispatcher& dispatcher,
   return {createConnection(dispatcher, *cluster_, address_, options), shared_from_this()};
 }
 
+Host::CreateConnectionData
+HostImpl::createHealthCheckConnection(Event::Dispatcher& dispatcher,
+                           const Network::ConnectionSocket::OptionsSharedPtr& options) const {
+  return {createConnection(dispatcher, *cluster_, health_check_address_, options), shared_from_this()};
+}
+
 Network::ClientConnectionPtr
 HostImpl::createConnection(Event::Dispatcher& dispatcher, const ClusterInfo& cluster,
                            Network::Address::InstanceConstSharedPtr address,

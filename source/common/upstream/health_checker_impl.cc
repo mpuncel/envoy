@@ -321,7 +321,7 @@ void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onEvent(Network::Conne
 void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onInterval() {
   if (!client_) {
     Upstream::Host::CreateConnectionData conn =
-        host_->createConnection(parent_.dispatcher_, nullptr);
+        host_->createHealthCheckConnection(parent_.dispatcher_, nullptr);
     client_.reset(parent_.createCodecClient(conn));
     client_->addConnectionCallbacks(connection_callback_impl_);
     expect_reset_ = false;
@@ -496,7 +496,7 @@ void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onEvent(Network::Connect
 
 void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onInterval() {
   if (!client_) {
-    client_ = host_->createConnection(parent_.dispatcher_, nullptr).connection_;
+    client_ = host_->createHealthCheckConnection(parent_.dispatcher_, nullptr).connection_;
     session_callbacks_.reset(new TcpSessionCallbacks(*this));
     client_->addConnectionCallbacks(*session_callbacks_);
     client_->addReadFilter(session_callbacks_);
@@ -561,6 +561,9 @@ void RedisHealthCheckerImpl::RedisActiveHealthCheckSession::onEvent(
 
 void RedisHealthCheckerImpl::RedisActiveHealthCheckSession::onInterval() {
   if (!client_) {
+    // TODO(mpuncel) should redis ignore health check address? or should we 
+    // enforce that it's not set? or is there a use case for health checking
+    // a different port?
     client_ = parent_.client_factory_.create(host_, parent_.dispatcher_, *this);
     client_->addConnectionCallbacks(*this);
   }
@@ -751,7 +754,7 @@ void GrpcHealthCheckerImpl::GrpcActiveHealthCheckSession::onEvent(Network::Conne
 void GrpcHealthCheckerImpl::GrpcActiveHealthCheckSession::onInterval() {
   if (!client_) {
     Upstream::Host::CreateConnectionData conn =
-        host_->createConnection(parent_.dispatcher_, nullptr);
+        host_->createHealthCheckConnection(parent_.dispatcher_, nullptr);
     client_ = parent_.createCodecClient(conn);
     client_->addConnectionCallbacks(connection_callback_impl_);
     client_->setCodecConnectionCallbacks(http_connection_callback_impl_);
