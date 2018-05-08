@@ -813,6 +813,117 @@ TEST_F(EdsTest, PriorityAndLocalityWeighted) {
   EXPECT_EQ(1UL, stats_.counter("cluster.name.update_no_rebuild").value());
 }
 
+// TODO: this test demonstrates a failure, fix the bug
+// Confirm that a priority level disappearing results in removing the hosts in
+// that priority level. For example, if we see a config update with priorities
+// 0 and 1 populated, followed by a config update with only priority 0
+// populated, the old "1" should be cleaned up
+TEST_F(EdsTest, DisappearingPriority) {
+  resetCluster(R"EOF(
+      name: name
+      connect_timeout: 0.25s
+      type: EDS
+      lb_policy: ROUND_ROBIN
+      common_lb_config:
+        locality_weighted_lb_config: {}
+      eds_cluster_config:
+        service_name: fare
+        eds_config:
+          api_config_source:
+            cluster_names:
+            - eds
+            refresh_delay: 1s
+    )EOF");
+
+  Protobuf::RepeatedPtrField<envoy::api::v2::ClusterLoadAssignment> resources;
+  auto* cluster_load_assignment = resources.Add();
+  cluster_load_assignment->set_cluster_name("fare");
+  uint32_t port = 1000;
+
+  auto add_hosts_to_locality_and_priority =
+      [cluster_load_assignment, &port](const std::string& region, const std::string& zone,
+                                       const std::string& sub_zone, uint32_t priority, uint32_t n,
+                                       uint32_t weight) {
+        auto* endpoints = cluster_load_assignment->add_endpoints();
+        endpoints->set_priority(priority);
+        auto* locality = endpoints->mutable_locality();
+        locality->set_region(region);
+        locality->set_zone(zone);
+        locality->set_sub_zone(sub_zone);
+        endpoints->mutable_load_balancing_weight()->set_value(weight);
+
+        for (uint32_t i = 0; i < n; ++i) {
+          auto* socket_address = endpoints->add_lb_endpoints()
+                                     ->mutable_endpoint()
+                                     ->mutable_address()
+                                     ->mutable_socket_address();
+          socket_address->set_address("1.2.3.4");
+          socket_address->set_port_value(port++);
+        }
+      };
+
+  add_hosts_to_locality_and_priority("oceania", "us-east-1a", "", 0, 2, 25);
+  add_hosts_to_locality_and_priority("foo", "bar", "eep", 1, 2, 40);
+
+  bool initialized=false;
+  cluster_->initialize([&initialized] { initialized = true; });
+  VERBOSE_EXPECT_NO_THROW(cluster_->onConfigUpdate(resources));
+  EXPECT_TRUE(initialized);
+  EXPECT_EQ(0UL, stats_.counter("cluster.name.update_no_rebuild").value());
+
+  {
+    auto& first_hosts_per_locality =
+        cluster_->prioritySet().hostSetsPerPriority()[0]->hostsPerLocality();
+    auto& first_locality_weights =
+        *cluster_->prioritySet().hostSetsPerPriority()[0]->localityWeights();
+    EXPECT_EQ(1, first_hosts_per_locality.get().size());
+    EXPECT_EQ(2, first_hosts_per_locality.get()[0].size());
+    EXPECT_EQ(25, first_locality_weights[0]);
+    EXPECT_THAT(Locality("oceania", "us-east-1a", ""),
+                ProtoEq(first_hosts_per_locality.get()[0][0]->locality()));
+
+    auto& second_hosts_per_locality =
+        cluster_->prioritySet().hostSetsPerPriority()[1]->hostsPerLocality();
+    auto& second_locality_weights =
+        *cluster_->prioritySet().hostSetsPerPriority()[1]->localityWeights();
+    ASSERT_EQ(1, second_hosts_per_locality.get().size());
+    EXPECT_EQ(2, second_hosts_per_locality.get()[0].size());
+    EXPECT_EQ(40, second_locality_weights[0]);
+    EXPECT_THAT(Locality("foo", "bar", "eep"),
+                ProtoEq(second_hosts_per_locality.get()[0][0]->locality()));
+  }
+
+  // now, move the foo/bar/eep locality to priority 0
+  resources.Clear();
+
+  auto* cluster_load_assignment2 = resources.Add();
+  cluster_load_assignment2->set_cluster_name("fare");
+
+  add_hosts_to_locality_and_priority("oceania", "us-east-1a", "", 0, 2, 25);
+
+  VERBOSE_EXPECT_NO_THROW(cluster_->onConfigUpdate(resources));
+
+  {
+    auto& first_hosts_per_locality =
+        cluster_->prioritySet().hostSetsPerPriority()[0]->hostsPerLocality();
+    auto& first_locality_weights =
+        *cluster_->prioritySet().hostSetsPerPriority()[0]->localityWeights();
+    EXPECT_EQ(1, first_hosts_per_locality.get().size());
+    EXPECT_EQ(2, first_hosts_per_locality.get()[0].size());
+    EXPECT_EQ(25, first_locality_weights[0]);
+    EXPECT_THAT(Locality("oceania", "us-east-1a", ""),
+                ProtoEq(first_hosts_per_locality.get()[0][0]->locality()));
+
+    EXPECT_EQ(1, cluster_->prioritySet().hostSetsPerPriority().size());
+
+    // Priority level 1 still has the old locality in it, because tracking is
+    // done on a per-priority basis
+    auto& second_hosts_per_locality =
+        cluster_->prioritySet().hostSetsPerPriority()[1]->hostsPerLocality();
+    ASSERT_EQ(0, second_hosts_per_locality.get().size());
+  }
+}
+
 // Throw on adding a new resource with an invalid endpoint (since the given address is invalid).
 TEST_F(EdsTest, MalformedIP) {
   Protobuf::RepeatedPtrField<envoy::api::v2::ClusterLoadAssignment> resources;
