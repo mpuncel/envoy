@@ -118,13 +118,14 @@ at different `ConfigSource`s.
 
 #### When to send an update
 
-The management server should only send updates to the Envoy client when the
-resources in the `DiscoveryResponse` have changed. Envoy replies to any
-`DiscoveryResponse` with a `DiscoveryRequest` containing the ACK/NACK
-immediately after it has been either accepted or rejected. If the management
-server provides the same set of resources rather than waiting for a change to
-occur, it will cause Envoy and the management server to spin and have a severe
-performance impact.
+The management server should send updates to the Envoy client when the
+resources in the `DiscoveryResponse` have changed, or if the Envoy client
+expands the set of resource hints requested for the given resource. Envoy
+replies to any `DiscoveryResponse` with a `DiscoveryRequest` containing the
+ACK/NACK immediately after it has been either accepted or rejected. If the
+management server provides the same set of resources rather than waiting for a
+change to occur, it will cause Envoy and the management server to spin and have
+a severe performance impact.
 
 Within a stream, new `DiscoveryRequest`s supersede any prior `DiscoveryRequest`s
 having the same resource type. This means that the management server only needs
@@ -196,12 +197,14 @@ the specific `DiscoveryResponse` each `DiscoveryRequest` corresponds to:
 
 ![EDS update race motivates nonces](diagrams/update-race.svg)
 
-The management server should not send a `DiscoveryResponse` for any
+The management server typically should not send a `DiscoveryResponse` for any
 `DiscoveryRequest` that has a stale nonce. A nonce becomes stale following a
 newer nonce being presented to Envoy in a `DiscoveryResponse`. A management
 server does not need to send an update until it determines a new version is
-available. Earlier requests at a version then also become stale. It may process
-multiple `DiscoveryRequests` at a version until a new version is ready.
+available, although it may be desirable to do so if Envoy has expanded the set
+of resource hints requested. Earlier requests at a version then also become
+stale. It may process multiple `DiscoveryRequests` at a version until a new
+version is ready.
 
 ![Requests become stale](diagrams/stale-requests.svg)
 
