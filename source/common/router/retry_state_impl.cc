@@ -193,6 +193,11 @@ RetryStatus RetryStateImpl::shouldRetryReset(const Http::StreamResetReason reset
   return shouldRetry(wouldRetryFromReset(reset_reason), callback);
 }
 
+RetryStatus RetryStateImpl::shouldRetryPerTryTimeout(DoRetryCallback callback) {
+  // Per try timeout is always retried if there are retries left.
+  return shouldRetry([]() -> bool { return true; }, callback);
+}
+
 bool RetryStateImpl::wouldRetryFromHeaders(const Http::HeaderMap& response_headers) {
   if (response_headers.EnvoyOverloaded() != nullptr) {
     return false;

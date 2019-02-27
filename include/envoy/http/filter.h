@@ -143,6 +143,8 @@ public:
 
   /**
    * @return uint64_t the ID of the originating stream for logging purposes.
+   * May also be used as a stable random value for making decisions about
+   * probabilistic features (e.g. request mirroring).
    */
   virtual uint64_t streamId() PURE;
 
