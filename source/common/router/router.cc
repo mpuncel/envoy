@@ -586,7 +586,7 @@ void Filter::onUpstreamAbort(Http::Code code, StreamInfo::ResponseFlag response_
 
 void Filter::onUpstreamReset(UpstreamResetType type,
                              const absl::optional<Http::StreamResetReason>& reset_reason) {
-  ASSERT(type == UpstreamResetType::GlobalTimeout || upstream_request_);
+  ASSERT(upstream_request_);
   if (type == UpstreamResetType::Reset) {
     ENVOY_STREAM_LOG(debug, "upstream reset: reset reason {}", *callbacks_,
                      reset_reason ? Http::Utility::resetReasonToString(reset_reason.value()) : "");
@@ -603,7 +603,7 @@ void Filter::onUpstreamReset(UpstreamResetType type,
   }
 
   // We don't retry on a global timeout or if we already started the response.
-  if (type != UpstreamResetType::GlobalTimeout && !downstream_response_started_ && retry_state_) {
+  if (!downstream_response_started_ && retry_state_) {
     // Notify retry modifiers about the attempted host.
     if (upstream_host != nullptr) {
       retry_state_->onHostAttempted(upstream_host);
@@ -639,7 +639,7 @@ void Filter::onUpstreamReset(UpstreamResetType type,
     cleanup();
     Http::Code code;
     std::string body;
-    if (type == UpstreamResetType::GlobalTimeout || type == UpstreamResetType::PerTryTimeout) {
+    if (type == UpstreamResetType::PerTryTimeout) {
       callbacks_->streamInfo().setResponseFlag(StreamInfo::ResponseFlag::UpstreamRequestTimeout);
 
       code = timeout_response_code_;
