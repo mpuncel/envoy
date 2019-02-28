@@ -370,6 +370,8 @@ private:
                                          Upstream::ResourcePriority priority) PURE;
   Http::ConnectionPool::Instance* getConnPool();
   void maybeDoShadowing();
+  bool maybeRetryReset(const absl::optional<Http::StreamResetReason>& reset_reason);
+  void onPerTryTimeout();
   void onRequestComplete();
   void onResponseTimeout();
   void onUpstream100ContinueHeaders(Http::HeaderMapPtr&& headers);
