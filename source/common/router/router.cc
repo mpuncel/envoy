@@ -528,7 +528,60 @@ void Filter::onResponseTimeout() {
     upstream_request_->resetStream();
   }
 
-  onUpstreamReset(UpstreamResetType::GlobalTimeout, absl::optional<Http::StreamResetReason>());
+  updateOutlierDetection(timeout_response_code_);
+  std::string body = timeout_response_code_ == Http::Code::GatewayTimeout ? "upstream request timeout" : "";
+  onUpstreamAbort(timeout_response_code_, StreamInfo::ResponseFlag::UpstreamRequestTimeout, body, false);
+}
+
+void Filter::updateOutlierDetection(Http::Code code) {
+  Upstream::HostDescriptionConstSharedPtr upstream_host;
+  if (upstream_request_) {
+    upstream_host = upstream_request_->upstream_host_;
+    if (upstream_host) {
+      upstream_host->outlierDetector().putHttpResponseCode(enumToInt(code));
+    }
+  }
+}
+
+void Filter::onUpstreamAbort(Http::Code code, StreamInfo::ResponseFlag response_flags, std::string body, bool dropped) {
+  Upstream::HostDescriptionConstSharedPtr upstream_host;
+  if (upstream_request_) {
+    upstream_host = upstream_request_->upstream_host_;
+  }
+
+  // If we have not yet sent anything downstream, send a response with an appropriate status code.
+  // Otherwise just reset the ongoing response.
+  if (downstream_response_started_) {
+    if (upstream_request_ != nullptr && upstream_request_->grpc_rq_success_deferred_) {
+      upstream_request_->upstream_host_->stats().rq_error_.inc();
+      config_.stats_.rq_reset_after_downstream_response_started_.inc();
+    }
+    // This will destroy any created retry timers.
+    cleanup();
+    callbacks_->resetStream();
+  } else {
+    // This will destroy any created retry timers.
+    cleanup();
+
+    callbacks_->streamInfo().setResponseFlag(response_flags);
+
+    chargeUpstreamCode(code, upstream_host, dropped);
+    // If we had non-5xx but still have been reset by backend or timeout before
+    // starting response, we treat this as an error. We only get non-5xx when
+    // timeout_response_code_ is used for code above, where this member can
+    // assume values such as 204 (NoContent).
+    if (upstream_host != nullptr && !Http::CodeUtility::is5xx(enumToInt(code))) {
+      upstream_host->stats().rq_error_.inc();
+    }
+    callbacks_->sendLocalReply(code, body.c_str(),
+                               [dropped, this](Http::HeaderMap& headers) {
+                                 if (dropped && !config_.suppress_envoy_headers_) {
+                                   headers.insertEnvoyOverloaded().value(
+                                       Http::Headers::get().EnvoyOverloadedValues.True);
+                                 }
+                               },
+                               absl::nullopt);
+  }
 }
 
 void Filter::onUpstreamReset(UpstreamResetType type,

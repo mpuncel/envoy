@@ -373,6 +373,7 @@ private:
   void onRequestComplete();
   void onResponseTimeout();
   void onUpstream100ContinueHeaders(Http::HeaderMapPtr&& headers);
+  void onUpstreamAbort(Http::Code code, StreamInfo::ResponseFlag response_flag, std::string body, bool dropped);
   void onUpstreamHeaders(uint64_t response_code, Http::HeaderMapPtr&& headers, bool end_stream);
   void onUpstreamData(Buffer::Instance& data, bool end_stream);
   void onUpstreamTrailers(Http::HeaderMapPtr&& trailers);
@@ -383,6 +384,7 @@ private:
   void sendNoHealthyUpstreamResponse();
   bool setupRetry(bool end_stream);
   bool setupRedirect(const Http::HeaderMap& headers);
+  void updateOutlierDetection(Http::Code code);
   void doRetry();
   // Called immediately after a non-5xx header is received from upstream, performs stats accounting
   // and handle difference between gRPC and non-gRPC requests.
