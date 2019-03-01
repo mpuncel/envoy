@@ -519,8 +519,7 @@ void Filter::onResponseTimeout() {
   ENVOY_STREAM_LOG(debug, "upstream timeout", *callbacks_);
   cluster_->stats().upstream_rq_timeout_.inc();
 
-  // It's possible to timeout during a retry backoff delay when we have no upstream request. In
-  // this case we fake a reset since onUpstreamReset() doesn't care.
+  // It's possible to timeout during a retry backoff delay when we have no upstream request.
   if (upstream_request_) {
     if (upstream_request_->upstream_host_) {
       upstream_request_->upstream_host_->stats().rq_timeout_.inc();
@@ -626,94 +625,32 @@ bool Filter::maybeRetryReset(const absl::optional<Http::StreamResetReason>& rese
   return false;
 }
 
-void Filter::onUpstreamReset(UpstreamResetType type,
-                             const absl::optional<Http::StreamResetReason>& reset_reason) {
+void Filter::onUpstreamReset(const absl::optional<Http::StreamResetReason>& reset_reason) {
   ASSERT(upstream_request_);
-  if (type == UpstreamResetType::Reset) {
-    ENVOY_STREAM_LOG(debug, "upstream reset: reset reason {}", *callbacks_,
-                     reset_reason ? Http::Utility::resetReasonToString(reset_reason.value()) : "");
-  }
+  ENVOY_STREAM_LOG(debug, "upstream reset: reset reason {}", *callbacks_,
+                   reset_reason ? Http::Utility::resetReasonToString(reset_reason.value()) : "");
 
   Upstream::HostDescriptionConstSharedPtr upstream_host;
   if (upstream_request_) {
     upstream_host = upstream_request_->upstream_host_;
-    if (upstream_host) {
-      upstream_host->outlierDetector().putHttpResponseCode(
-          enumToInt(type == UpstreamResetType::Reset ? Http::Code::ServiceUnavailable
-                                                     : timeout_response_code_));
-    }
   }
 
-  // We don't retry on a global timeout or if we already started the response.
-  if (!downstream_response_started_ && retry_state_) {
-    // Notify retry modifiers about the attempted host.
-    if (upstream_host != nullptr) {
-      retry_state_->onHostAttempted(upstream_host);
-    }
+  Http::Code code = Http::Code::ServiceUnavailable;
 
-    RetryStatus retry_status =
-        retry_state_->shouldRetry(nullptr, reset_reason, [this]() -> void { doRetry(); });
-    if (retry_status == RetryStatus::Yes && setupRetry(true)) {
-      if (upstream_host) {
-        upstream_host->stats().rq_error_.inc();
-      }
-      return;
-    } else if (retry_status == RetryStatus::NoOverflow) {
-      callbacks_->streamInfo().setResponseFlag(StreamInfo::ResponseFlag::UpstreamOverflow);
-    } else if (retry_status == RetryStatus::NoRetryLimitExceeded) {
-      callbacks_->streamInfo().setResponseFlag(
-          StreamInfo::ResponseFlag::UpstreamRetryLimitExceeded);
-    }
+  updateOutlierDetection(code);
+
+  if (maybeRetryReset(reset_reason)) {
+    return;
   }
 
-  // If we have not yet sent anything downstream, send a response with an appropriate status code.
-  // Otherwise just reset the ongoing response.
-  if (downstream_response_started_) {
-    if (upstream_request_ != nullptr && upstream_request_->grpc_rq_success_deferred_) {
-      upstream_request_->upstream_host_->stats().rq_error_.inc();
-      config_.stats_.rq_reset_after_downstream_response_started_.inc();
-    }
-    // This will destroy any created retry timers.
-    cleanup();
-    callbacks_->resetStream();
-  } else {
-    // This will destroy any created retry timers.
-    cleanup();
-    Http::Code code;
-    std::string body;
-    if (type == UpstreamResetType::PerTryTimeout) {
-      callbacks_->streamInfo().setResponseFlag(StreamInfo::ResponseFlag::UpstreamRequestTimeout);
+  StreamInfo::ResponseFlag response_flags =
+      streamResetReasonToResponseFlag(reset_reason.value());
+  std::string body = absl::StrCat(
+        "upstream connect error or disconnect/reset before headers. reset reason: ",
+        reset_reason ? Http::Utility::resetReasonToString(reset_reason.value()) : "");
 
-      code = timeout_response_code_;
-      body = code == Http::Code::GatewayTimeout ? "upstream request timeout" : "";
-    } else {
-      StreamInfo::ResponseFlag response_flags =
-          streamResetReasonToResponseFlag(reset_reason.value());
-      callbacks_->streamInfo().setResponseFlag(response_flags);
-      code = Http::Code::ServiceUnavailable;
-      body = absl::StrCat(
-          "upstream connect error or disconnect/reset before headers. reset reason: ",
-          reset_reason ? Http::Utility::resetReasonToString(reset_reason.value()) : "");
-    }
-
-    const bool dropped = reset_reason && reset_reason.value() == Http::StreamResetReason::Overflow;
-    chargeUpstreamCode(code, upstream_host, dropped);
-    // If we had non-5xx but still have been reset by backend or timeout before
-    // starting response, we treat this as an error. We only get non-5xx when
-    // timeout_response_code_ is used for code above, where this member can
-    // assume values such as 204 (NoContent).
-    if (upstream_host != nullptr && !Http::CodeUtility::is5xx(enumToInt(code))) {
-      upstream_host->stats().rq_error_.inc();
-    }
-    callbacks_->sendLocalReply(code, body.c_str(),
-                               [dropped, this](Http::HeaderMap& headers) {
-                                 if (dropped && !config_.suppress_envoy_headers_) {
-                                   headers.insertEnvoyOverloaded().value(
-                                       Http::Headers::get().EnvoyOverloadedValues.True);
-                                 }
-                               },
-                               absl::nullopt);
-  }
+  const bool dropped = reset_reason && reset_reason.value() == Http::StreamResetReason::Overflow;
+  onUpstreamAbort(code, response_flags, body, dropped);
 }
 
 StreamInfo::ResponseFlag
@@ -1153,8 +1090,7 @@ void Filter::UpstreamRequest::onResetStream(Http::StreamResetReason reason) {
   clearRequestEncoder();
   if (!calling_encode_headers_) {
     stream_info_.setResponseFlag(parent_.streamResetReasonToResponseFlag(reason));
-    parent_.onUpstreamReset(UpstreamResetType::Reset,
-                            absl::optional<Http::StreamResetReason>(reason));
+    parent_.onUpstreamReset(absl::optional<Http::StreamResetReason>(reason));
   } else {
     deferred_reset_reason_ = reason;
   }

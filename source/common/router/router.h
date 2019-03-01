@@ -381,8 +381,7 @@ private:
   void onUpstreamTrailers(Http::HeaderMapPtr&& trailers);
   void onUpstreamMetadata(Http::MetadataMapPtr&& metadata_map);
   void onUpstreamComplete();
-  void onUpstreamReset(UpstreamResetType type,
-                       const absl::optional<Http::StreamResetReason>& reset_reason);
+  void onUpstreamReset(const absl::optional<Http::StreamResetReason>& reset_reason);
   void sendNoHealthyUpstreamResponse();
   bool setupRetry(bool end_stream);
   bool setupRedirect(const Http::HeaderMap& headers);
