@@ -2693,6 +2693,7 @@ TEST_F(HttpConnectionManagerImplTest, UpstreamWatermarkCallbacks) {
 }
 
 TEST_F(HttpConnectionManagerImplTest, UnderlyingConnectionWatermarksPassedOnWithLazyCreation) {
+  std::cout << "here" << std::endl;
   setup(false, "");
 
   // Make sure codec_ is created.
@@ -2700,6 +2701,7 @@ TEST_F(HttpConnectionManagerImplTest, UnderlyingConnectionWatermarksPassedOnWith
   Buffer::OwnedImpl fake_input("");
   conn_manager_->onData(fake_input, false);
 
+  std::cout << "here" << std::endl;
   // Mark the connection manger as backed up before the stream is created.
   ASSERT_EQ(decoder_filters_.size(), 0);
   EXPECT_CALL(*codec_, onUnderlyingConnectionAboveWriteBufferHighWatermark());
@@ -2715,13 +2717,17 @@ TEST_F(HttpConnectionManagerImplTest, UnderlyingConnectionWatermarksPassedOnWith
       // Call the high buffer callbacks as the codecs do.
       stream_callbacks_->onAboveWriteBufferHighWatermark();
     }));
+  std::cout << "here" << std::endl;
 
     // Send fake data to kick off newStream being created.
     Buffer::OwnedImpl fake_input2("asdf");
+    std::cout << "onData" << std::endl;
     conn_manager_->onData(fake_input2, false);
+    std::cout << "after onData" << std::endl;
   }
 
   // Now set up the filter chain by sending full headers. The filters should be
+  std::cout << "here" << std::endl;
   // immediately appraised that the low watermark is in effect.
   {
     setupFilterChain(2, 2);
@@ -2739,11 +2745,13 @@ TEST_F(HttpConnectionManagerImplTest, UnderlyingConnectionWatermarksPassedOnWith
         }));
     EXPECT_CALL(*decoder_filters_[0], decodeComplete());
     sendRequestHeadersAndData();
+  std::cout << "here" << std::endl;
     ASSERT_GE(decoder_filters_.size(), 1);
     MockDownstreamWatermarkCallbacks callbacks;
     EXPECT_CALL(callbacks, onAboveWriteBufferHighWatermark());
     decoder_filters_[0]->callbacks_->addDownstreamWatermarkCallbacks(callbacks);
   }
+  std::cout << "here" << std::endl;
 }
 
 TEST_F(HttpConnectionManagerImplTest, UnderlyingConnectionWatermarksUnwoundWithLazyCreation) {
