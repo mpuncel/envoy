@@ -135,10 +135,12 @@ FilterUtility::finalTimeout(const RouteEntry& route, Http::HeaderMap& request_he
   }
   timeout.per_try_timeout_ = route.retryPolicy().perTryTimeout();
 
+  std::cout << "in the router!" << std::endl;
   Http::HeaderEntry* header_timeout_entry = request_headers.EnvoyUpstreamRequestTimeoutMs();
   uint64_t header_timeout;
   if (header_timeout_entry) {
     if (StringUtil::atoull(header_timeout_entry->value().c_str(), header_timeout)) {
+      std::cout << "setting the global timeout!" << std::endl;
       timeout.global_timeout_ = std::chrono::milliseconds(header_timeout);
     }
     request_headers.removeEnvoyUpstreamRequestTimeoutMs();
@@ -430,6 +432,7 @@ void Filter::sendNoHealthyUpstreamResponse() {
 }
 
 Http::FilterDataStatus Filter::decodeData(Buffer::Instance& data, bool end_stream) {
+  ENVOY_STREAM_LOG(debug, "decodeData", *callbacks_);
   bool buffering =
       (retry_state_ && retry_state_->enabled()) || do_shadowing_ || upstream_requests_.size() > 1;
   if (buffering && buffer_limit_ > 0 &&
@@ -447,8 +450,10 @@ Http::FilterDataStatus Filter::decodeData(Buffer::Instance& data, bool end_strea
       // on if we might have multiple upstream requests or traffic
       // shadowing/retries.
       Buffer::OwnedImpl copy(data);
+  ENVOY_STREAM_LOG(debug, "encodeData (buffer)", *callbacks_);
       upstream_request->encodeData(copy, end_stream);
     } else {
+  ENVOY_STREAM_LOG(debug, "encodeData (not buffer)", *callbacks_);
       upstream_request->encodeData(data, end_stream);
     }
   }
@@ -534,9 +539,14 @@ void Filter::onRequestComplete() {
     maybeDoShadowing();
 
     if (timeout_.global_timeout_.count() > 0) {
+      std::cout << "router: setting response timeout" << std::endl;
       response_timeout_ = dispatcher.createTimer([this]() -> void { onResponseTimeout(); });
       response_timeout_->enableTimer(timeout_.global_timeout_);
+    } else {
+      std::cout << "router: NOT setting response timeout" << std::endl;
     }
+  } else {
+      std::cout << "upstream requests empty!" << std::endl;
   }
 }
 
@@ -544,6 +554,7 @@ void Filter::onDestroy() { cleanup(); }
 
 void Filter::onResponseTimeout() {
   ENVOY_STREAM_LOG(debug, "upstream timeout", *callbacks_);
+  std::cout << "router: onResponseTimeout" << std::endl;
 
   // Reset any upstream requests that are still in flight.
   for (auto& upstream_request : upstream_requests_) {
@@ -1346,6 +1357,7 @@ void Filter::UpstreamRequest::onPoolReady(Http::StreamEncoder& request_encoder,
       upstream_timing_.onLastUpstreamTxByteSent(parent_.callbacks_->dispatcher().timeSource());
     }
   }
+  ENVOY_STREAM_LOG(debug, "end pool ready", *parent_.callbacks_);
 }
 
 RetryStatePtr
