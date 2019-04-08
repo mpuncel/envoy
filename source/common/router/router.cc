@@ -150,6 +150,7 @@ FilterUtility::finalTimeout(const RouteEntry& route, Http::HeaderMap& request_he
   Http::HeaderEntry* per_try_timeout_entry = request_headers.EnvoyUpstreamRequestPerTryTimeoutMs();
   if (per_try_timeout_entry) {
     if (StringUtil::atoull(per_try_timeout_entry->value().c_str(), header_timeout)) {
+      std::cout << "setting the per try timeout!" << std::endl;
       timeout.per_try_timeout_ = std::chrono::milliseconds(header_timeout);
     }
     request_headers.removeEnvoyUpstreamRequestPerTryTimeoutMs();
@@ -610,6 +611,7 @@ void Filter::onSoftPerTryTimeout(UpstreamRequest& upstream_request) {
 }
 
 void Filter::onPerTryTimeout(UpstreamRequest& upstream_request) {
+  std::cout << "router: onPerTryTimeout" << std::endl;
   if (hedging_params_.hedge_on_per_try_timeout_) {
     onSoftPerTryTimeout(upstream_request);
     return;
@@ -1246,6 +1248,7 @@ void Filter::UpstreamRequest::onResetStream(Http::StreamResetReason reason,
 
 void Filter::UpstreamRequest::resetStream() {
   // Don't reset the stream if we're already done with it.
+  std::cout << "router: resetStream()" << std::endl;
   if (encode_complete_ && decode_complete_) {
     return;
   }
@@ -1260,16 +1263,21 @@ void Filter::UpstreamRequest::resetStream() {
   if (request_encoder_) {
     ENVOY_STREAM_LOG(debug, "resetting pool request", *parent_.callbacks_);
     request_encoder_->getStream().removeCallbacks(*this);
+    std::cout << "router: actually resetting stream" << std::endl;
     request_encoder_->getStream().resetStream(Http::StreamResetReason::LocalReset);
     clearRequestEncoder();
-  }
+  } else {
+    std::cout << "no request encoder" << std::endl;
+    }
 }
 
 void Filter::UpstreamRequest::setupPerTryTimeout() {
   ASSERT(!per_try_timeout_);
+  std::cout << "router: setupPerTryTimeout" << std::endl;
   if (parent_.timeout_.per_try_timeout_.count() > 0) {
     per_try_timeout_ =
         parent_.callbacks_->dispatcher().createTimer([this]() -> void { onPerTryTimeout(); });
+    std::cout << "router: enabling per try timeout timer with " << parent_.timeout_.per_try_timeout_.count() << std::endl;
     per_try_timeout_->enableTimer(parent_.timeout_.per_try_timeout_);
   }
 }

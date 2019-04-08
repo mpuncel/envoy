@@ -299,6 +299,7 @@ void ConnectionImpl::StreamImpl::encodeData(Buffer::Instance& data, bool end_str
 
 void ConnectionImpl::StreamImpl::resetStream(StreamResetReason reason) {
   // Higher layers expect calling resetStream() to immediately raise reset callbacks.
+  std::cout << "http2: runResetCallbacks" << std::endl;
   runResetCallbacks(reason);
 
   // If we submit a reset, nghttp2 will cancel outbound frames that have not yet been sent.
