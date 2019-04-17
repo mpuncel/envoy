@@ -95,4 +95,42 @@ TEST_P(HttpTimeoutIntegrationTest, PerTryTimeout) {
   EXPECT_EQ("504", response->headers().Status()->value().getStringView());
 }
 
+// Sends a request with a global timeout specified but never writes the full
+// request to Envoy. Ensures that the global timeout eventually fires.
+TEST_P(HttpTimeoutIntegrationTest, GlobalTimeoutIncompleteDownstreamRequest) {
+  initialize();
+
+  codec_client_ = makeHttpConnection(makeClientConnection(lookupPort("http")));
+  auto encoder_decoder = codec_client_->startRequest(
+      Http::TestHeaderMapImpl{{":method", "POST"},
+                              {":path", "/test/long/url"},
+                              {":scheme", "http"},
+                              {":authority", "host"},
+                              {"x-forwarded-for", "10.0.0.1"},
+                              {"x-envoy-upstream-rq-timeout-ms", "500"}});
+  auto response = std::move(encoder_decoder.second);
+  request_encoder_ = &encoder_decoder.first;
+
+  ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection_));
+  ASSERT_TRUE(fake_upstream_connection_->waitForNewStream(*dispatcher_, upstream_request_));
+  ASSERT_TRUE(upstream_request_->waitForHeadersComplete());
+
+  // Trigger global timeout.
+  timeSystem().sleep(std::chrono::milliseconds(5001));
+
+  ASSERT_TRUE(upstream_request_->waitForEndStream(*dispatcher_));
+
+  // Ensure we got a timeout downstream and canceled the upstream request.
+  response->waitForHeaders();
+  ASSERT_TRUE(upstream_request_->waitForReset(std::chrono::milliseconds(0)));
+
+  codec_client_->close();
+
+  EXPECT_TRUE(upstream_request_->complete());
+  EXPECT_EQ(0U, upstream_request_->bodyLength());
+
+  EXPECT_TRUE(response->complete());
+  EXPECT_EQ("504", response->headers().Status()->value().getStringView());
+}
+
 } // namespace Envoy
