@@ -1125,6 +1125,7 @@ void Filter::UpstreamRequest::resetStream() {
 
   if (request_encoder_) {
     ENVOY_STREAM_LOG(debug, "resetting pool request", *parent_.callbacks_);
+    std::cout << "resetting stream" << std::endl;
     request_encoder_->getStream().removeCallbacks(*this);
     request_encoder_->getStream().resetStream(Http::StreamResetReason::LocalReset);
   }

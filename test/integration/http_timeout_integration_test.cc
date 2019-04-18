@@ -36,6 +36,7 @@ TEST_P(HttpTimeoutIntegrationTest, GlobalTimeout) {
 
   // Ensure we got a timeout downstream and canceled the upstream request.
   response->waitForHeaders();
+  std::cout << "waiting for reset" << std::endl;
   ASSERT_TRUE(upstream_request_->waitForReset(std::chrono::milliseconds(0)));
 
   codec_client_->close();
