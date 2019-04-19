@@ -23,7 +23,8 @@ public:
   std::list<StreamCallbacks*> callbacks_{};
 
   void runHighWatermarkCallbacks() {
-    for (auto* callback : callbacks_) {
+    std::list<StreamCallbacks*> callbacks_copy(callbacks_);
+    for (auto callback : callbacks_copy) {
       callback->onAboveWriteBufferHighWatermark();
     }
   }

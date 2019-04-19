@@ -1547,7 +1547,11 @@ bool ConnectionManagerImpl::ActiveStream::verbose() const {
 
 void ConnectionManagerImpl::ActiveStream::callHighWatermarkCallbacks() {
   ++high_watermark_count_;
-  for (auto watermark_callbacks : watermark_callbacks_) {
+
+  // Iterate over a copy of watermark_callbacks_ because the callback might remove
+  // itself from the list while we iterate.
+  std::list<DownstreamWatermarkCallbacks*> callbacks_copy(watermark_callbacks_);
+  for (auto watermark_callbacks : callbacks_copy) {
     watermark_callbacks->onAboveWriteBufferHighWatermark();
   }
 }
@@ -1555,7 +1559,11 @@ void ConnectionManagerImpl::ActiveStream::callHighWatermarkCallbacks() {
 void ConnectionManagerImpl::ActiveStream::callLowWatermarkCallbacks() {
   ASSERT(high_watermark_count_ > 0);
   --high_watermark_count_;
-  for (auto watermark_callbacks : watermark_callbacks_) {
+
+  // Iterate over a copy of watermark_callbacks_ because the callback might remove
+  // itself from the list while we iterate.
+  std::list<DownstreamWatermarkCallbacks*> callbacks_copy(watermark_callbacks_);
+  for (auto watermark_callbacks : callbacks_copy) {
     watermark_callbacks->onBelowWriteBufferLowWatermark();
   }
 }
