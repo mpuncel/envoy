@@ -256,7 +256,9 @@ void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onInterval() {
                                            parent_.transportSocketMatchMetadata().get());
     client_.reset(parent_.createCodecClient(conn));
     client_->addConnectionCallbacks(connection_callback_impl_);
+    client_->setCodecConnectionCallbacks(http_connection_callback_impl_);
     expect_reset_ = false;
+    received_no_error_goaway_ = false;
   }
 
   Http::RequestEncoder* request_encoder = &client_->newStream(*this);
@@ -286,6 +288,25 @@ void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onResetStream(Http::St
   ENVOY_CONN_LOG(debug, "connection/stream error health_flags={}", *client_,
                  HostUtility::healthFlagsToString(*host_));
   handleFailure(envoy::data::core::v3::NETWORK);
+}
+
+void HttpHealthCheckerImpl::HttpActiveHealthCheckSession::onGoAway(
+    Http::GoAwayErrorCode error_code) {
+  ENVOY_CONN_LOG(debug, "connection going away health_flags={}", *client_,
+                 HostUtility::healthFlagsToString(*host_));
+
+  if (error_code == Http::GoAwayErrorCode::NoError) {
+    // The server is starting a graceful shutdown. Allow any in flight
+    // request to finish without treating this as a health check error, and then
+    // reconnect.
+    received_no_error_goaway_ = true;
+    return;
+  }
+
+  handleFailure(envoy::data::core::v3::NETWORK);
+  if (client_) {
+    client_->close();
+  }
 }
 
 HttpHealthCheckerImpl::HttpActiveHealthCheckSession::HealthCheckResult
@@ -345,7 +366,7 @@ bool HttpHealthCheckerImpl::HttpActiveHealthCheckSession::shouldClose() const {
     return false;
   }
 
-  if (!parent_.reuse_connection_) {
+  if (!parent_.reuse_connection_ || received_no_error_goaway_) {
     return true;
   }
 
