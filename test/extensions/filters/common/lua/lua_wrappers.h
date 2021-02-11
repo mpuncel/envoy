@@ -37,7 +37,8 @@ public:
   }
 
   void start(const std::string& method) {
-    coroutine_->start(state_->getGlobalRef(state_->registerGlobal(method)), 1, yield_callback_);
+    coroutine_->start(state_->getGlobalRef(state_->registerGlobal(method, initializers_)), 1,
+                      yield_callback_);
   }
 
   static int luaTestPrint(lua_State* state) {
@@ -51,6 +52,7 @@ public:
   std::function<void()> yield_callback_;
   CoroutinePtr coroutine_;
   const Printer& printer_{getPrinter()};
+  InitializerList initializers_;
 };
 
 } // namespace Lua
